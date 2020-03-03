@@ -1,0 +1,486 @@
+---
+title: "Analysis of Netflix Movies and TV Shows"
+subtitle: "Practical Statistics for Data Science"
+author: "by Gabriel Erichson"
+output:
+  html_document:
+    code_folding: hide
+    css: style.css
+    df_print: paged
+    highlight: haddock
+    number_sections: yes
+    theme: sandstone
+    toc: yes
+    toc_depth: 3
+    toc_float:
+      collapsed: yes
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  result="hide",
+  message = FALSE,
+  warning = FALSE,
+  fig.align = "center",
+  comment = "#>"
+)
+
+
+options(scipen = 9999999)
+library(tidyverse)
+library(stringr)
+```
+
+# Intro
+
+## Sumber Data
+
+Dataset ini terdiri dari acara tv (TV Show) dan film (Movie) yang tersedia di Netflix dari 2008-01-01 sampai 2020-01-18. Dataset ini didapatkan dari link https://www.kaggle.com/shivamb/netflix-shows
+
+
+
+## Pertanyaan
+
+Beberapa pertanyaan yang dapat hendak dijawab berdasarkan dataset ini yaitu:
+
+1. Berapa perbandingan dan jumlah konten Movie dan TV Show ?<br>
+2. Bagaimana pertumbuhan jumlah konten Movie dan TV Show di Netflix setiap tahun?
+3. Apa kategori yang memiliki konten yang paling sedikit dan paling sedikit di netflix?<br>
+4. Apa negara yang paling banyak menghasilkan konten?<br>
+5. Berapa minumun, maximum dan rata-rata durasi konten masing-masing kategori Movie dan TV Show?<br>
+6. Bagaimana pengaruh durasi konten terhadap rating yang didapat?<br>
+  
+  
+***
+
+<br>
+
+# Data Pre-processing
+
+Hasil data netflix diimport dan disimpan kedalam variabel penampung `netflix`
+```{r}
+#Load Data
+netflix <- read.csv("data_input/netflix.csv")
+```
+
+## Data Inspection
+### Seluruh Data
+```{r}
+netflix
+```
+
+### 10 Data Teratas
+```{r}
+head(netflix,10)
+```
+### 10 Data Terbawah
+```{r}
+tail(netflix,10)
+```
+
+### Deskripsi Variabel
+Dataset Netflix diimport dan disimpan dalam bentuk data frame. Diatas merupakan sampel 5 data teratas dari dataset netlfix yang digunakan. Data tersebut memiliki variabel yang masing-masing menyimpan informasi sebagai berikut:
+
+<table class="table table-condensed">
+  <tr>
+    <th>Variabel</th>
+    <th>Informasi</th>
+  </tr>
+  <tr>
+    <td>show_id</td>
+    <td>ID dari masing-masing data konten</td>
+  </tr>
+   <tr>
+    <td>type</td>
+    <td>Jenis konten `Movie` atau `TV Show`</td>
+  </tr>
+   <tr>
+    <td>title</td>
+    <td>Merupakan judul atau nama konten</td>
+  </tr>
+   <tr>
+    <td>director</td>
+    <td>Director dari konten</td>
+  </tr>
+   <tr>
+    <td>cast</td>
+    <td>Artis atau Pemeran pada konten</td>
+  </tr>
+   <tr>
+    <td>country</td>
+    <td>Negara asal konten</td>
+  </tr>
+   <tr>
+    <td>date_added</td>
+    <td>Tanggal konten tersebut dimasukan ke Netflix</td>
+  </tr>
+  <tr>
+    <td>release_year</td>
+    <td>Tahun konten tersebut perdana ditayangkan ke publik</td>
+  </tr>
+  <tr>
+    <td>rating</td>
+    <td>Penialian/rating konten tersebut. Berikut link referensi untuk sistem rating konten televisi: https://id.wikipedia.org/wiki/Sistem_rating_konten_televisi</td>
+  </tr>
+  <tr>
+    <td>duration</td>
+    <td>Durasi waktu konten</td>
+  </tr>
+  <tr>
+    <td>listed_in</td>
+    <td>Kategori atau genre konten</td>
+  </tr>
+  <tr>
+    <td>description
+    <td>Deskripsi singkat dari konten</td>
+  </tr>
+</table>
+
+
+## Data Cleansing
+### Struktur Data
+```{r}
+str(netflix)
+```
+
+Jika dilihat pada struktur dataset netflix diatas yaitu terdapat _6234_ observasi dan _12_ variabel. Berdasarkan data yang ditampilkan, beberapa data type perlu dikonversi ulang sesuai kebutuhan supaya mempermudah untuk mengexplorasi data. Kemudian variabel show_id kurang memberikan informasi yang penting sehingga dapat dibuang dari dataset. Berikut proses dan struktur data setelah dikonversi:
+
+```{r}
+netflix <- netflix[,-1]
+netflix$date_added <- as.Date(netflix$date_added, format = "%B %d, %Y")
+netflix$added_year <- format(netflix$date_added,"%Y")
+netflix$added_year <- as.integer(netflix$added_year)
+netflix$description <- as.character(netflix$description)
+
+
+str(netflix)
+```
+### Data Duplikat
+```{r}
+unique(netflix)
+```
+
+Terdapat 1 data yang duplikat. Sebelumnya total data **6234** namun menggunakan fungsi uniqe menjadi **6233**. Oleh karena itu data duplikat dapat dibuang dari dataset netflix.
+```{r}
+netflix <- unique(netflix)
+```
+
+### Missing Values
+```{r}
+colSums(is.na(netflix))
+```
+
+Jika dilihat terdapat _651_ data yang NULL dari variabel _date_added_ . Berdasarkan pertanyaan yang diinginkan, variabel date_added tidak digunakan, sehingga missing values dari date added dapat diabaikan.
+
+
+<br>
+
+# Data Explanation
+
+```{r}
+summary(netflix)
+```
+
+<br>
+<h5 style="font-weight: 500;">Data Summary</h5>
+
+Dataset ini memiliki informasi konten yang ditambahkan dari tanggal **2008-01-01** hingga **2020-01-18** namun perlu diingat bahwa terdapat 651 missing values atas date_added sehingga informasi ini perlu divalidasi lagi. Selain itu, beberapa informasi yang bisa didapatkan antara lain:
+
+1. Jumlah konten jenis **Movie** sebanyak 4265
+2. Jumlah konten jenis **Tv Show**  sebanyak 1969
+3. **Raúl Campos** dan **Jan Suter** sebagai director yang sering berkolaborasi. Hasil kolaborasi mereka menghasilkan 18 konten dan jumlah itu membuat mereka menjadi director yang paling banyak membuat konten.
+4. **David Attenborough** merupakan pemeran konten paling banyak, dengan jumlah 18 konten.
+5. **United States** merupakan negara yang paling banyak membuat konten, dengan jumlah 2032 konten.
+6. Konten yang ditambahkan dari tanggal 2008-01-01 hingga 2020-01-18 merupakan konten yang release dari tahun **1925** sampai **2020**.
+7. Rating **TV-MA** paling banyak di netflix. Rating TV-MA adalah salah satu sistem rating konten televisi di Amerika untuk menunjukan konten dewasa 18 tahun keatas.
+8. Konten berdurasi **1 season** paling banyak di netflix, dengan jumlah 1321 konten.
+9. Konten kategori **Documentaries** paling banyak di netflix, dengan jumlah 299 konten.
+
+
+<br>
+
+# Data Analysis
+
+
+## Berapa perbandingan jumlah konten pada masing-masing jenis TV Show dan Movie ?
+
+**Jawaban:**
+```{r}
+table(netflix$type)
+round(prop.table(table(netflix$type))*100,1)
+```
+
+Jumlah Konten berjenis **Movie** sebanyak 4264 (68.4%) dan konten berjenis **TV Show** sebanyak 1969 (31.6%). Jika dilihat jumlah konten Movie lebih dari 2 kali lipat jumlah konten TV Show.
+
+
+***
+
+<br>
+
+
+## Bagaimana pertumbuhan jumlah konten di Netflix tiap tahun?
+**Jawaban:**
+
+<br>**Pertumbuhan jumlah konten Movie setiap tahun:**
+```{r}
+df.movie <- netflix[netflix$type=="Movie",]
+df.movie.growth <- data.frame(table(df.movie$added_year))
+df.movie.growth
+plot(df.movie.growth$Var1, df.movie.growth$Freq,type = "b", pch=15, xlab="Tahun",ylab="Jumlah",main="Pertumbuhan Jumlah Konten Movie")
+lines(df.movie.growth$Var1, df.movie.growth$Freq,type = "o", col = "blue")
+```
+
+<br>**Pertumbuhan jumlah konten TV Show setiap tahun:**
+```{r}
+df.tv <- netflix[netflix$type=="TV Show",]
+df.tv.growth <- data.frame(table(df.tv$added_year))
+df.tv.growth
+plot(df.tv.growth$Var1, df.tv.growth$Freq,type = "b", pch=15,xlab="Tahun",ylab="Jumlah",main="Pertumbuhan Jumlah Konten TV Show")
+lines(df.tv.growth$Var1, df.tv.growth$Freq,type = "o", col = "orange")
+```
+
+Berdasarkan 2 grafik diatas, dapat disimpulkan bahwa jumlah konten Movie dan TV Show pada Netflix cenderung meningkat dari setiap tahun. Peningkatan jumlah konten cukup besar semenjak tahun 2015 hingga 2019. Kemudian, pertumbuhan jumlah konten dari tahun 2019-2020 tidak valid untuk diinterpretasikan karena tahun 2020 masih berjalan. `Notes:` grafik ini dibuat dengan kondisi 651 missing value dari data `date_added` sehingga terdapat missing information terkait pertumbuhan jumlah konten di netfix.
+
+***
+
+<br>
+
+## Apa kategori yang memiliki konten yang paling sedikit dan paling banyak di netflix?
+**Jawaban:** <br>
+1 konten bisa memiliki beberapa kategori, misalkan **Avenger** memiliki kategori **Action, Crime, Sci-Fi** sehingga untuk mengetahui jumlah konten berdasarkan kategori maka kategori tersebut perlu dipisahkan.
+```{r}
+# Memisahkan kumpulan kategori didalam 1 konten menjadi satuan
+netflix.kategori <- separate_rows(netflix,listed_in, sep = ',')
+df.kategori <- data.frame(sort(table(netflix.kategori$listed_in),decreasing = T))
+```
+
+<br>**Kategori konten terbanyak:**
+```{r}
+df.kategori[df.kategori$Freq==max(df.kategori$Freq),]
+```
+
+<br>**Kategori konten paling sedikit**
+```{r}
+df.kategori[df.kategori$Freq==min(df.kategori$Freq),]
+```
+
+
+Kategori konten paling banyak yaitu **International Movies** dengan jumlah **1841 konten**. Kategori konten paling sedikit yaitu **Spanish-Language TV Shows, Sports Movies dan TV Sci-Fi & Fantasy** yang dimana masing-masing hanya memiliki **1 konten**, berikut data film dengan kategori paling sedikit:
+
+```{r}
+netflix.kategori[netflix.kategori$listed_in %in% df.kategori[df.kategori$Freq==min(df.kategori$Freq),1],]
+```
+
+
+***
+
+<br>
+
+## Apa negara yang paling banyak menghasilkan konten?
+
+**Jawaban:**<br>
+1 konten bisa memiliki beberapa negara pembuatan, misalkan **La DoÃ±a** memiliki negara pembuatan **United States, Mexico** sehingga untuk mengetahui jumlah konten berdasarkan negara pembuatan maka data negara tersebut perlu dipisahkan.
+
+```{r}
+# Memisahkan kumpulan negara didalam 1 konten menjadi satuan
+netflix.negara <- separate_rows(netflix,country, sep = ',')
+df.negara <- data.frame(sort(table(netflix.negara$country),decreasing = T))
+```
+
+**Negara yang menghasilkan konten terbanyak:**
+```{r}
+df.negara[df.negara$Freq==max(df.negara$Freq),]
+```
+
+<br>**Negara yang menghasilkan konten paling sedikit:**
+```{r}
+df.negara[df.negara$Freq==min(df.negara$Freq),]
+```
+
+
+Negara dengan konten paling banyak di netflix adalah **United States** dengan jumlah 2302 konten. Kemudian terdapat 45 negara yang menghasilkan 1 konten atau paling sedikit, diantaranya dapat dilihat pada bagian diatas.
+
+
+***
+
+<br>
+
+## Berapa minimun, maximum dan rata-rata durasi konten masing-masing kategori TV Show dan Movie?
+**Jawaban:**
+```{r}
+# extract durasi menjadi numeric
+numextract <- function(string){ 
+  as.numeric(str_extract(string, "\\-*\\d+\\.*\\d*"))
+} 
+
+# dalah case ini, rata-rata durasi konten dicari menggunakan modus karena jika menggunakan fungsi mean, maka akan dijumlahkan datanya
+most <- function(x){
+  as.character(names(sort(-table(x)))[1])
+}
+
+# MOVIE
+netflix.movie <- netflix[netflix$type=="Movie",]
+netflix.movie <- cbind(netflix.movie,total_minutes=numextract(netflix.movie$duration))
+
+plot(density(netflix.movie$total_minutes), "Penyebaran Total Durasi Konten Movie")
+polygon(density(netflix.movie$total_minutes), col="blue", border="orange")
+
+# Durasi minimum
+min(netflix.movie$total_minutes)
+# Durasi Maximum
+max(netflix.movie$total_minutes)
+# Durasai Rata-Rata/kebanyakan konten berdurasi berapa
+most(netflix.movie$total_minutes)
+
+
+#================================================================================================
+# TV SHOW
+netflix.tv <- netflix[netflix$type=="TV Show",]
+netflix.tv <- cbind(netflix.tv,total_seasons=numextract(netflix.tv$duration))
+
+plot(density(netflix.tv$total_seasons), "Penyebaran Total Durasi Konten TV Show (Seasons)")
+polygon(density(netflix.tv$total_seasons), col="orange", border="blue")
+
+# Durasi minimum
+min(netflix.tv$total_seasons)
+# Durasi Maximum
+max(netflix.tv$total_seasons)
+# Durasai Rata-Rata 
+most(netflix.tv$total_seasons)
+
+
+```
+
+Berdasar chart diatas, durasi konten Movie dan konten TV Show tidak berdistribusi normal yang artinya cukup banyak durasi konten yang kurang atau lebih dari rata-rata durasi konten yang ada pada masing-masing jenis konten Movie dan TV Show. Rata-rata durasi konten *Movie* yaitu **90 menit**. Durasi konten *Movie* paling cepat yaitu **3 menit** dengan judul Silent dan Durasi konten *Movie* paling lama yaitu **312 menit** dengan judul Black Mirror: Bandersnatch. Rata-Rata durasi konten *TV Show* yaitu **1 Seasons** dan durasi paling cepat yaitu 1 Seasons. Durasi konten *TV Show* paling lama yaitu **15 Seasons**. Berikut datanya:
+
+**1. Konten Movie dengan durasi Terlama dan Tercepat**
+```{r}
+# konten movie dengan durasi tercepat dan terlama
+netflix.movie[netflix.movie$total_minutes %in% c(3,312),]
+```
+
+<br>**2. Konten TV Show dengan durasi Terlama dan Tercepat**
+```{r}
+#konten TV Show dengan durasi terlama
+df.tv.durasi <-  netflix.tv[netflix.tv$total_seasons %in% c(15,1),]
+df.tv.durasi[order(df.tv.durasi$total_seasons,decreasing = T),]
+```
+
+
+***
+
+<br>
+
+## Bagaimana pengaruh durasi konten terhadap rating yang didapat?
+**Jawaban:**
+```{r}
+netflix.movie$rating <- as.numeric(netflix.movie$rating)
+netflix.tv$rating <- as.numeric(netflix.tv$rating)
+
+# Pengaruh durasi Konten terhadap rating
+plot(x=netflix.movie$total_minutes,y=netflix.movie$rating,
+     main = "Pengaruh Durasi terhadap Rating pada Konten Movie",xlab = "Durasi (Minutes)", ylab = "Rating",pch = 19)
+abline(lm(netflix.movie$rating ~ netflix.movie$total_minutes, data = netflix.movie), col = "blue")
+
+plot(x=netflix.tv$total_seasons,y=netflix.tv$rating,
+     main = "Pengaruh Durasi terhadap Rating pada Konten TV Show",xlab = "Durasi (Seasons)", ylab = "Rating",pch = 19)
+abline(lm(netflix.tv$rating ~ netflix.tv$total_seasons, data = netflix.tv), col = "orange")
+
+```
+
+
+Berdasarkan Scatter Diagram diatas, durasi pada konten Movie dan konten TV Show tidak memiliki pengaruh terhadap rating dari sebuah konten apabila dilihat secara keseluruhan. Namun, apakah benar? Melihat poin **4.5**, distribusi penyeberan durasi konten tidak normal. *Lantas Apakah durasi memiliki pengaruh terhadap rating konten jika data durasi konten berdistribusi normal ?* Jika dilihat pada scatter diagram diatas menunjukan datanya terlalu berpencar/menyebar dan tidak membentuk pola yang linear, dengan begitu menunjukan bahwa tidak ada korelasi, berikut pembuktiannya:
+
+
+<br>**1. Pengaruh Durasi terhadap Rating Konten Movie (Exclude Outlier Durasi)**
+```{r}
+bp.durasi.movie <- boxplot(netflix.movie$total_minutes, main="Boxplot Durasi Konten Movie")
+```
+
+Boxplot Durasi Konten Movie menunjukan cukup banyak data durasi yang menjadi outlier atau jauh diluar pemusatan data, baik lebih tinggi maupun lebih rendah. Untuk itu, data tersebut akan dibuang supaya distribusi durasi menjadi normal. Berikut prosesnya:
+
+```{r}
+# Total Data Durasi movie outlier dan non outlier
+data.frame("total data movie"=length(netflix.movie$total_minutes),
+           "total outlier"=length(bp.durasi.movie$out),
+           "total non outlier"=length(netflix.movie$total_minutes)-length(bp.durasi.movie$out))
+
+# Memisahkan data durasi movie dari outlier
+netflix.durasi.movie.in <- netflix.movie[!netflix.movie$total_minutes %in% bp.durasi.movie$out,]
+netflix.durasi.movie.in$rating <- as.numeric(netflix.durasi.movie.in$rating)
+
+# Membuat plot
+plot(density(netflix.durasi.movie.in$total_minutes), "Penyebaran Total Durasi Konten Movie (Exclude Outlier)")
+polygon(density(netflix.durasi.movie.in$total_minutes), col="blue", border="orange")
+
+```
+
+Berdasarkan data diatas, Total data movie sebelumnya **4264** dan setelah outlier dibuang menjadi **4034**. Jika dilihat chart **Penyebaran Total Durasi Konten Movie (Exclude Outlier)**, meskipun tetap banyak data yang jauh dari rata-rata, distribusi data dapat dikatakan lebih normal dari chart pada poin **4.5** karena pemusatan data mendekati nilai rata-rata durasi. Lantas apakah data durasi ini memiliki pengaruh terhadap data ratingnya?
+
+```{r}
+# Pengaruh durasi Konten terhadap rating setelah outlier dibuang
+plot(x=netflix.durasi.movie.in$total_minutes,y=netflix.durasi.movie.in$rating,
+     main = "Pengaruh Durasi terhadap Rating pada Konten Movie (Exclude Outlier)",xlab = "Durasi (Minutes)", ylab = "Rating",pch = 19)
+abline(lm(netflix.durasi.movie.in$rating ~ netflix.durasi.movie.in$total_minutes, data = netflix.durasi.movie.in), col = "blue")
+```
+
+**Setelah outlier pada durasi konten Movie di exclude, scatter diagram diatas memperjelas bahwa durasi konten Movie tidak memiliki pengaruh terhadap nilai rating dari sebuah konten**
+
+
+
+<br>**2. Pengaruh Durasi terhadap Rating Konten TV Show (Exclude Outlier Durasi)**
+
+```{r}
+bp.durasi.tv <- boxplot(netflix.tv$total_seasons, main="Boxplot Durasi Konten TV Show")
+```
+
+**Boxplot Durasi Konten TV Show** menunjukan cukup banyak data outlier dimana data durasi lebih tinggi dari rata-rata durasi pemusatan data. Untuk itu, data tersebut akan dibuang supaya distribusi durasi menjadi normal. Berikut prosesnya:
+
+```{r}
+# Total Data Durasi TV Show outlier dan non outlier
+data.frame("total data tvshow"=length(netflix.tv$total_seasons),
+           "total outlier"=length(bp.durasi.tv$out),
+           "total non outlier"=length(netflix.tv$total_seasons)-length(bp.durasi.tv$out))
+
+# Memisahkan data durasi movie dari outlier
+netflix.durasi.tv.in <- netflix.tv[!netflix.tv$total_seasons %in% bp.durasi.tv$out,]
+netflix.durasi.tv.in$rating <- as.numeric(netflix.durasi.tv.in$rating)
+
+# Membuat plot
+plot(density(netflix.durasi.tv.in$total_seasons), "Penyebaran Total Durasi Konten Movie (Exclude Outlier)")
+polygon(density(netflix.durasi.tv.in$total_seasons), col="blue", border="orange")
+
+
+```
+
+Berdasarkan chart data diatas, Total data TV Show sebelumnya **1969** dan setelah outlier dibuang menjadi **1783**. Jika dilihat chart **Penyebaran Total Durasi Konten TV Show (Exclude Outlier)**, meskipun data tetap berdistribusi tidak normal, setidaknya lebih menunjukan pola penyeberan durasi dari konten TV Show paling banyak berpusat 1 Season, kemudian 2 season dan kemudian 3 season.
+
+```{r}
+# Pengaruh durasi Konten terhadap rating setelah outlier dibuang
+plot(x=netflix.durasi.tv.in$total_seasons,y=netflix.durasi.tv.in$rating,
+     main = "Pengaruh Durasi terhadap Rating pada Konten Movie (Exclude Outlier)",xlab = "Durasi (Minutes)", ylab = "Rating",pch = 19)
+abline(lm(netflix.durasi.tv.in$rating ~ netflix.durasi.tv.in$total_seasons, data = netflix.durasi.tv.in), col = "blue")
+```
+
+**Meskipun outlier pada durasi konten TV Show di exclude, scatter diagram diatas memperjelas bahwa durasi konten TV Show tidak memiliki pengaruh terhadap nilai rating dari sebuah konten**
+
+<br>
+
+# Summary
+Berdasarkan proses analisis data yang sudah dilakukan, pertanyaan-pertanyaan yang ada sudah berhasil dijawab. Secara umum dapat disimpulkan bahwa Jumlah konten Movie dan TV Show di Netflix cenderung meningkat setiap tahun, yang dimana peningkatan jumlah konten mulai tinggi semenjak tahun 2015. Namun perlu dipertimbangkan kembali terkait 651 missing value atas variabel data_added karena variabel ini yang digunakan untuk mengukur pertumbuhan jumlah konten. Konten jenis Movie dan TV Show terdiri dari berbagai kategori/genre dan negara produksi, yang dimana setiap konten tersebut memiliki rating. Informasi penting terkait rating konten yang didapatkan yaitu durasi dari sebuah konten Movie atau konten TV Show yang ada di netflix tidak berpengaruh signifikan terhadap pemberian rating sebuah konten. 
+
+<br>
+
+# Reference
+
+1. [Netflix Movies and TV Shows: Analysis in R](https://www.kaggle.com/seshadrikolluri/netflix-movies-and-tv-shows-analysis-in-r)
+
+2. [Sistem rating konten televisi](https://id.wikipedia.org/wiki/Sistem_rating_konten_televisi)
+
+3. [Separate a collapsed column into multiple rows](https://tidyr.tidyverse.org/reference/separate_rows.html)
+
+4. [Extraction of numbers from a character string](http://stla.github.io/stlapblog/posts/Numextract.html)
+
+5. [Scatter Plots - R Base Graphs](http://www.sthda.com/english/wiki/scatter-plots-r-base-graphs)
